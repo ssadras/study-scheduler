@@ -1,0 +1,22 @@
+    User Table:
+        UserID (Primary Key)
+        Username (Discord username)
+	Name
+	Email
+
+    RecurringActivity Table:
+        RecurringActivityID (Primary Key)
+        RecurrencePattern (e.g., Daily, Weekly, Monthly)
+        RecurrenceEndDate
+
+    Activity Table:
+        ActivityID (Primary Key)
+        UserID (Foreign Key referencing User.UserID)
+        Title
+        Description
+	Type (1-Busy 2-Group Meeting 3-Personal Optional 4-Group Optional 5-Fun 6-Additional)
+	Date
+        StartTime
+        EndTime
+	IsRecurring (Boolean)
+        RecurringActivityID (Foreign Key referencing RecurringActivity.RecurringActivityID, nullable)
