@@ -18,7 +18,7 @@ class Database:
             return self.conn
 
         try:
-            self.conn = sqlite3.connect(self.path)
+            self.conn = sqlite3.connect(self.path, isolation_level=None)
             print("Connection to SQLite DB successful")
         except Error as e:
             print(f"The error '{e}' occurred")
@@ -46,7 +46,7 @@ class Database:
             print("DB.insert: ", insert_sql)
 
         try:
-            tst = self.conn.execute(insert_sql)
+            self.conn.execute(insert_sql)
             print("Row inserted successfully")
         except Error as e:
             print(f"The error '{e}' occurred")
