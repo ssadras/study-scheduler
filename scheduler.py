@@ -130,8 +130,8 @@ class Scheduler:
 
         recurring_activity_table_sql = """CREATE TABLE IF NOT EXISTS RecurringActivity (
                             id      INTEGER PRIMARY KEY AUTOINCREMENT,
-                            pattern VARCHAR(50) NOT NULL,
-                            endDate DATE
+                            pattern INTEGER NOT NULL,
+                            endDate DATE NOT NULL
                         );"""
 
         activities_table_sql = """CREATE TABLE IF NOT EXISTS Activity (
@@ -167,7 +167,7 @@ class Scheduler:
             print("User already exists")
             return False
 
-        insert_sql = f"""INSERT INTO User (Username, Name, Email)
+        insert_sql = f"""INSERT INTO User (username, name, email)
                         VALUES ('{username}', '{name}', '{email}');"""
 
         try:
@@ -181,7 +181,7 @@ class Scheduler:
     def get_user(self, username):
         """ get a user from the database """
 
-        select_sql = f"""SELECT * FROM User WHERE Username = '{username}';"""
+        select_sql = f"""SELECT * FROM User WHERE username = '{username}';"""
 
         cursor = self.db.select(select_sql)
 
@@ -196,9 +196,12 @@ class Scheduler:
 
         return cursor
 
-    def insert_activity(self, username, title, description, type, date, start_time, end_time, is_recurring,
-                        recurring_pattern, recurring_end_date):
-        """ insert an activity into the database """
+    def insert_activity(self, username, title, description, act_type, date, start_time, end_time, is_recurring=False,
+                        recurring_pattern=None, recurring_end_date=None):
+        """ insert an activity into the database
+
+        act_type: 0-Busy 1-Group Meeting 2-Personal Optional 3-Group Optional 4-Fun 5-Other
+        """
 
         recurring_activity_id = None
 
@@ -212,9 +215,9 @@ class Scheduler:
 
         user_id = user_id[0]
 
-        insert_sql = f"""INSERT INTO Activity (UserID, Title, Description, Type, Date, StartTime, EndTime, IsRecurring, 
-                    RecurringActivityID) VALUES ({user_id}, '{title}', '{description}', {type}, '{date}', '{start_time}'
-                    , '{end_time}', {is_recurring}, {recurring_activity_id});"""
+        insert_sql = f"""INSERT INTO Activity (userID, title, description, type, date, startTime, endTime, isRecurring, 
+                    recurringActivityID) VALUES ({user_id}, '{title}', '{description}', {act_type}, '{date}', '{start_time}'
+                    , '{end_time}', '{is_recurring}', '{recurring_activity_id}');"""
 
         try:
             self.db.insert(insert_sql)
@@ -225,9 +228,12 @@ class Scheduler:
         return True
 
     def insert_recurring_activity(self, recurring_pattern, recurring_end_date):
-        """ insert a recurring activity into the database """
+        """ insert a recurring activity into the database
 
-        insert_sql = f"""INSERT INTO RecurringActivity (RecurrencePattern, RecurrenceEndDate)
+        recurring_pattern: 0-Daily 1-Weekly 2-Monthly 3-Yearly
+        """
+
+        insert_sql = f"""INSERT INTO RecurringActivity (pattern, endDate)
                         VALUES ('{recurring_pattern}', '{recurring_end_date}');"""
 
         recurring_activity_id = self.db.insert_with_output_id(insert_sql)
