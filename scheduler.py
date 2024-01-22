@@ -1,8 +1,8 @@
 import sqlite3
 from sqlite3 import Error
 
+DEBUG = True
 
-# Sadra part 😎
 
 class Database:
     def __init__(self, path):
@@ -28,6 +28,9 @@ class Database:
     def create_table(self, create_table_sql):
         """ create a table from the create_table_sql statement """
 
+        if DEBUG:
+            print("DB.create_table: ", create_table_sql)
+
         try:
             self.conn.execute(create_table_sql)
             print("Table created successfully")
@@ -39,8 +42,11 @@ class Database:
     def insert(self, insert_sql):
         """ insert a row into a table from the insert_sql statement """
 
+        if DEBUG:
+            print("DB.insert: ", insert_sql)
+
         try:
-            self.conn.execute(insert_sql)
+            tst = self.conn.execute(insert_sql)
             print("Row inserted successfully")
         except Error as e:
             print(f"The error '{e}' occurred")
@@ -49,6 +55,9 @@ class Database:
 
     def insert_with_output_id(self, insert_sql):
         """ insert a row into a table from the insert_sql statement and return the id of the inserted row """
+
+        if DEBUG:
+            print("DB.insert_with_output_id: ", insert_sql)
 
         cursor = None
 
@@ -63,6 +72,9 @@ class Database:
     def select(self, select_sql):
         """ select rows from a table from the select_sql statement """
 
+        if DEBUG:
+            print("DB.select: ", select_sql)
+
         cursor = None
 
         try:
@@ -76,6 +88,9 @@ class Database:
     def update(self, update_sql):
         """ update rows from a table from the update_sql statement """
 
+        if DEBUG:
+            print("DB.update: ", update_sql)
+
         try:
             self.conn.execute(update_sql)
             print("Rows updated successfully")
@@ -86,6 +101,9 @@ class Database:
 
     def delete(self, delete_sql):
         """ delete rows from a table from the delete_sql statement """
+
+        if DEBUG:
+            print("DB.delete: ", delete_sql)
 
         try:
             self.conn.execute(delete_sql)
@@ -141,14 +159,11 @@ class Scheduler:
 
         return True
 
-    def insert_user(self, user_id, username, name, email):
+    def insert_user(self, username, name, email):
         """ insert a user into the database, if the user already exists, return False """
 
-        select_sql = f"""SELECT * FROM User WHERE Username = {username};"""
-
-        cursor = self.db.select(select_sql)
-
-        if cursor is not None:
+        user_id = self.get_user(username)
+        if user_id is not None:
             print("User already exists")
             return False
 
@@ -166,10 +181,15 @@ class Scheduler:
     def get_user(self, username):
         """ get a user from the database """
 
-        select_sql = f"""SELECT * FROM User WHERE Username = {username};"""
+        select_sql = f"""SELECT * FROM User WHERE Username = '{username}';"""
 
         cursor = self.db.select(select_sql)
 
+        if cursor is None:
+            print("User does not exist")
+            return None
+
+        cursor = cursor.fetchone()
         if cursor is None:
             print("User does not exist")
             return None
