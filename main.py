@@ -1,6 +1,7 @@
-import scheduler
+from scheduler import Scheduler
 
-db = scheduler.Database("database.sqlite3")
-db.create_connection()
+scheduler = Scheduler()
+
+scheduler.create_tables()
 
 # Jeremy part 😅

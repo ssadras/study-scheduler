@@ -9,6 +9,8 @@ class Database:
         self.path = path
         self.conn = None
 
+        self.create_connection()
+
     def create_connection(self):
         """ create a database connection to a SQLite database """
 
@@ -95,40 +97,39 @@ class Database:
 
 
 class Scheduler:
-    def __init__(self, path):
+    def __init__(self, path="database.sqlite3"):
         self.db = Database(path)
 
     def create_tables(self):
         """ create tables in the database """
 
         user_table_sql = """CREATE TABLE IF NOT EXISTS User (
-                                        UserID INT PRIMARY KEY AUTO_INCREMENT,
-                                        Username VARCHAR(255) NOT NULL,
-                                        Name VARCHAR(255),
-                                        Email VARCHAR(255)
-                                    );
-                                    """
+                            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                            username VARCHAR(255) NOT NULL,
+                            name     VARCHAR(255),
+                            email    VARCHAR(255)
+                        );"""
 
         recurring_activity_table_sql = """CREATE TABLE IF NOT EXISTS RecurringActivity (
-                                        RecurringActivityID INT PRIMARY KEY AUTO_INCREMENT,
-                                        RecurrencePattern VARCHAR(50) NOT NULL,
-                                        RecurrenceEndDate DATE
-                                    );"""
+                            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                            pattern VARCHAR(50) NOT NULL,
+                            endDate DATE
+                        );"""
 
         activities_table_sql = """CREATE TABLE IF NOT EXISTS Activity (
-                                        ActivityID INT PRIMARY KEY AUTO_INCREMENT,
-                                        UserID INT,
-                                        Title VARCHAR(255),
-                                        Description TEXT,
-                                        Type INT,
-                                        Date DATE,
-                                        StartTime TIME,
-                                        EndTime TIME,
-                                        IsRecurring BOOLEAN,
-                                        RecurringActivityID INT,
-                                        FOREIGN KEY (UserID) REFERENCES User(UserID),
-                                        FOREIGN KEY (RecurringActivityID) REFERENCES RecurringActivity(RecurringActivityID)
-                                    );"""
+                            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                            userID              INTEGER NOT NULL,
+                            title               VARCHAR(255),
+                            description         TEXT,
+                            type                INTEGER,
+                            date                DATE,
+                            startTime           TIME,
+                            endTime             TIME,
+                            isRecurring         BOOLEAN,
+                            recurringActivityID INTEGER,
+                            FOREIGN KEY (userID) REFERENCES User (id),
+                            FOREIGN KEY (recurringActivityID) REFERENCES RecurringActivity (id)
+                        );"""
 
         try:
             self.db.create_table(user_table_sql)
