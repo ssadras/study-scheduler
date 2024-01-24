@@ -1,5 +1,8 @@
 import sqlite3
 from sqlite3 import Error
+import matplotlib.pyplot as plt
+import matplotlib.table
+import pandas as pd
 
 DEBUG = True
 
@@ -239,3 +242,149 @@ class Scheduler:
         recurring_activity_id = self.db.insert_with_output_id(insert_sql)
 
         return recurring_activity_id
+
+    def get_activities_by_user(self, username, start_date, end_date):
+        """ get activities from the database for a user """
+
+        user_id = self.get_user(username)
+        if user_id is None:
+            print("User does not exist")
+            return None
+
+        user_id = user_id[0]
+
+        select_sql = f"""SELECT * FROM Activity WHERE userID = {user_id} AND date >= '{start_date}' 
+                        AND date <= '{end_date}';"""
+
+        cursor = self.db.select(select_sql)
+
+        if cursor is None:
+            print("No activities found for this user")
+            return None
+
+        cursor = cursor.fetchall()
+        if cursor is None or len(cursor) == 0:
+            print("No activities found for this user")
+            return None
+
+        return cursor
+
+    def get_activities_by_date(self, start_date, end_date):
+        """ get activities from the database for a user """
+
+        select_sql = f"""SELECT * FROM Activity WHERE date >= '{start_date}' 
+                        AND date <= '{end_date}';"""
+
+        cursor = self.db.select(select_sql)
+
+        if cursor is None:
+            print("No activities found for this period of time")
+            return None
+
+        cursor = cursor.fetchall()
+        if cursor is None or len(cursor) == 0:
+            print("No activities found for this period of time")
+            return None
+
+        return cursor
+
+    def get_activities_by_type(self, act_type, start_date, end_date):
+        """ get activities from the database e for a user """
+
+        select_sql = f"""SELECT * FROM Activity WHERE type = {act_type} AND date >= '{start_date}' 
+                        AND date <= '{end_date}';"""
+
+        cursor = self.db.select(select_sql)
+
+        if cursor is None:
+            print("No activities found for this type")
+            return None
+
+        cursor = cursor.fetchall()
+        if cursor is None or len(cursor) == 0:
+            print("No activities found for this type")
+            return None
+
+        return cursor
+
+    def visualize_calendar(self, start_date, end_date):
+        """ Visualize the calendar for the interval of start_date to end_date and save it as an image.
+        It needs to be in a timetable format. (Columns should be days of the week and rows should be hours of
+        the day from 7 am to midnight)
+        The rows need title of each hour and the columns need the day of the week.
+        """
+
+        # Get all activities in the interval
+        activities = self.get_activities_by_date(start_date, end_date)
+
+        # Create a dataframe
+        df = pd.DataFrame(
+            columns=['Time', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
+
+        # Add the time to the dataframe
+        for i in range(7, 24):
+            df.loc[i - 7, 'Time'] = f'{i}:00'
+
+        # Add all activities to the dataframe
+        print(activities)
+        for activity in activities:
+            # Find the day of the week
+            day_of_week = pd.to_datetime(activity[5]).day_name()
+
+            # Find the start and end time
+            start_time = pd.to_datetime(activity[6]).strftime('%H:%M')
+            end_time = pd.to_datetime(activity[7]).strftime('%H:%M')
+
+            # Find the start and end time index
+            start_time_index = int(start_time.split(':')[0]) - 7
+            end_time_index = int(end_time.split(':')[0]) - 7
+
+            # Find the title
+            title = activity[2]
+
+            print(start_time_index, end_time_index, day_of_week, title)
+
+            # Add the title to the dataframe
+            for i in range(start_time_index, end_time_index):
+                if (df.loc[i, day_of_week] == '' or df.loc[i, day_of_week] == 'nan'
+                        or not isinstance(df.loc[i, day_of_week], str)):
+                    df.loc[i, day_of_week] = title
+                else:
+                    df.loc[i, day_of_week] += f'\n{title}'
+
+        # Fill all empty cells with empty string
+        df.fillna('', inplace=True)
+
+        # Create the figure and axes objects
+        fig, ax = plt.subplots()
+
+        # Remove the axes
+        ax.axis('off')
+
+        # Create the table
+        table: matplotlib.table.Table = ax.table(cellText=df.values, colLabels=df.columns, loc='center')
+
+        # Set the cell width
+        table.auto_set_column_width(col=list(range(len(df.columns))))
+
+        # Set the cell height
+        for i in range(7, 24):
+            height = 0.05
+
+            # check the number of lines in the cell
+            for j in range(1, 8):
+                num_lines = len(table[(i - 6, j)].get_text().get_text().split('\n'))
+                height = max(height, num_lines * 0.05)
+
+            # set the cell heights
+            for j in range(0, 8):
+                table[(i - 6, j)].set_height(height)
+
+        # Set the font size
+        table.set_fontsize(14)
+
+        # Set the figure size
+        fig.set_size_inches(18.5, 10.5)
+
+        # Save the figure
+        fig.savefig('calendar.png', dpi=100)
