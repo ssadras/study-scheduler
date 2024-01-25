@@ -1,4 +1,4 @@
-from config import DEBUG, START_OF_DAY_HOUR, END_OF_DAY_HOUR
+from config import DEBUG, START_OF_DAY_HOUR, END_OF_DAY_HOUR, TIME_INTERVAL
 import matplotlib.pyplot as plt
 import matplotlib.table
 import pandas as pd
@@ -8,6 +8,12 @@ from db import Database
 class Scheduler:
     def __init__(self, path="database.sqlite3"):
         self.db = Database(path)
+        self.df_weekly = pd.DataFrame(
+            columns=['Time', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
+
+        if DEBUG:
+            self.df_weekly = pd.DataFrame(
+                columns=['index', 'Time', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
 
     def create_tables(self):
         """ create tables in the database """
@@ -195,26 +201,33 @@ class Scheduler:
 
         return cursor
 
-    def visualize_calendar(self, start_date, end_date):
-        """ Visualize the calendar for the interval of start_date to end_date and save it as an image.
-        It needs to be in a timetable format. (Columns should be days of the week and rows should be hours of
-        the day from 7 am to midnight)
-        The rows need title of each hour and the columns need the day of the week.
-        """
+    def add_activity_to_dataframe(self, start_time_index, end_time_index, column, title):
+        """ Add an activity to the dataframe """
+        if DEBUG:
+            print(start_time_index, end_time_index, column, title)
+
+        # Add the title to the dataframe
+        for i in range(start_time_index, end_time_index):
+            if (self.df_weekly.loc[i, column] == '' or self.df_weekly.loc[i, column] == 'nan'
+                    or not isinstance(self.df_weekly.loc[i, column], str)):
+                self.df_weekly.loc[i, column] = title
+            else:
+                self.df_weekly.loc[i, column] += f'\n{title}'
+
+    def create_weekly_dataframe_hourly(self, start_date, end_date):
+        """ create a dataframe for the activities in the database for a period of time based on hourly intervals """
 
         # Get all activities in the interval
         activities = self.get_activities_by_date(start_date, end_date)
 
-        # Create a dataframe
-        df = pd.DataFrame(
-            columns=['Time', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
-
         # Add the time to the dataframe
         for i in range(START_OF_DAY_HOUR, END_OF_DAY_HOUR):
-            df.loc[i - START_OF_DAY_HOUR, 'Time'] = f'{i}:00'
+            self.df_weekly.loc[i - START_OF_DAY_HOUR, 'Time'] = f'{i}:00'
 
         # Add all activities to the dataframe
-        print(activities)
+        if DEBUG:
+            print(activities)
+
         for activity in activities:
             # Find the day of the week
             day_of_week = pd.to_datetime(activity[5]).day_name()
@@ -230,18 +243,134 @@ class Scheduler:
             # Find the title
             title = activity[2]
 
-            print(start_time_index, end_time_index, day_of_week, title)
-
-            # Add the title to the dataframe
-            for i in range(start_time_index, end_time_index):
-                if (df.loc[i, day_of_week] == '' or df.loc[i, day_of_week] == 'nan'
-                        or not isinstance(df.loc[i, day_of_week], str)):
-                    df.loc[i, day_of_week] = title
-                else:
-                    df.loc[i, day_of_week] += f'\n{title}'
+            self.add_activity_to_dataframe(start_time_index, end_time_index, day_of_week, title)
 
         # Fill all empty cells with empty string
-        df.fillna('', inplace=True)
+        self.df_weekly.fillna('', inplace=True)
+
+        return self.df_weekly
+
+    def create_weekly_dataframe_30_mins(self, start_date, end_date):
+        """ create a dataframe for the activities in the database for a period of time based on 30 minutes intervals """
+        # Get all activities in the interval
+        activities = self.get_activities_by_date(start_date, end_date)
+
+        # Add the time to the dataframe
+        for i in range(START_OF_DAY_HOUR, END_OF_DAY_HOUR):
+            self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 2, 'Time'] = f'{i}:00'
+            self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 2 + 1, 'Time'] = f'{i}:30'
+
+            if DEBUG:
+                self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 2, 'index'] = f'{(i - START_OF_DAY_HOUR) * 2}'
+                self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 2 + 1, 'index'] = f'{(i - START_OF_DAY_HOUR) * 2 + 1}'
+
+        # Add all activities to the dataframe
+        if DEBUG:
+            print(activities)
+
+        for activity in activities:
+            # Find the day of the week
+            day_of_week = pd.to_datetime(activity[5]).day_name()
+
+            # Find the start and end time
+            start_time = pd.to_datetime(activity[6]).strftime('%H:%M')
+            end_time = pd.to_datetime(activity[7]).strftime('%H:%M')
+
+            # Find the start and end time index
+            tmp_start_time = start_time.split(':')
+            start_time_index = 2 * (int(tmp_start_time[0]) - START_OF_DAY_HOUR) + (int(tmp_start_time[1]) // 30)
+            tmp_end_time = end_time.split(':')
+
+            end_time_index = 2 * int(tmp_end_time[0]) - int(tmp_start_time[0]) + (int(tmp_end_time[1]) // 30)
+
+            if DEBUG:
+                print(start_time_index, start_time, end_time_index, end_time)
+
+            # Find the title
+            title = activity[2]
+
+            self.add_activity_to_dataframe(start_time_index, end_time_index, day_of_week, title)
+
+        # Fill all empty cells with empty string
+        self.df_weekly.fillna('', inplace=True)
+
+        return self.df_weekly
+
+    def create_weekly_dataframe_15_mins(self, start_date, end_date):
+        """ create a dataframe for the activities in the database for a period of time based on 15 minutes intervals """
+        # Get all activities in the interval
+        activities = self.get_activities_by_date(start_date, end_date)
+
+        # Add the time to the dataframe
+        for i in range(START_OF_DAY_HOUR, END_OF_DAY_HOUR):
+            self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 4, 'Time'] = f'{i}:00'
+            self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 4 + 1, 'Time'] = f'{i}:15'
+            self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 4 + 2, 'Time'] = f'{i}:30'
+            self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 4 + 3, 'Time'] = f'{i}:45'
+
+            if DEBUG:
+                self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 4, 'index'] = f'{(i - START_OF_DAY_HOUR) * 4}'
+                self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 4 + 1, 'index'] = f'{(i - START_OF_DAY_HOUR) * 4 + 1}'
+                self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 4 + 2, 'index'] = f'{(i - START_OF_DAY_HOUR) * 4 + 2}'
+                self.df_weekly.loc[(i - START_OF_DAY_HOUR) * 4 + 3, 'index'] = f'{(i - START_OF_DAY_HOUR) * 4 + 3}'
+
+        # Add all activities to the dataframe
+        if DEBUG:
+            print(activities)
+
+        for activity in activities:
+            # Find the day of the week
+            day_of_week = pd.to_datetime(activity[5]).day_name()
+
+            # Find the start and end time
+            start_time = pd.to_datetime(activity[6]).strftime('%H:%M')
+            end_time = pd.to_datetime(activity[7]).strftime('%H:%M')
+
+            # Find the start and end time index
+            tmp_start_hour, tmp_start_min = start_time.split(':')
+            tmp_start_hour = int(tmp_start_hour)
+            tmp_start_min = int(tmp_start_min)
+
+            tmp_end_hour, tmp_end_min = end_time.split(':')
+            tmp_end_hour = int(tmp_end_hour)
+            tmp_end_min = int(tmp_end_min)
+
+            if DEBUG:
+                print("CHECK1: ", tmp_start_hour, tmp_start_min, tmp_end_hour, tmp_end_min)
+                print("CHECK2: ", tmp_start_hour - START_OF_DAY_HOUR, tmp_start_min // 15)
+
+            start_time_index = 4 * (tmp_start_hour - START_OF_DAY_HOUR) + (tmp_start_min // 15)
+
+            end_time_index = start_time_index + (4 * (tmp_end_hour - tmp_start_hour)
+                                                 + (tmp_end_min // 15)) + 1
+
+            if DEBUG:
+                print(start_time_index, start_time, end_time_index, end_time)
+
+            # Find the title
+            title = activity[2]
+
+            self.add_activity_to_dataframe(start_time_index, end_time_index, day_of_week, title)
+
+        # Fill all empty cells with empty string
+        self.df_weekly.fillna('', inplace=True)
+
+        return self.df_weekly
+
+    def visualize_calendar(self, start_date, end_date):
+        """ Visualize the calendar for the interval of start_date to end_date and save it as an image.
+        It needs to be in a timetable format. (Columns should be days of the week and rows should be hours of
+        the day)
+        The rows need title of each hour and the columns need the day of the week.
+        """
+
+        # Create the dataframe
+        if TIME_INTERVAL == 1:
+            self.create_weekly_dataframe_15_mins(start_date, end_date)
+        elif TIME_INTERVAL == 2:
+            self.create_weekly_dataframe_30_mins(start_date, end_date)
+        else:
+            self.create_weekly_dataframe_hourly(start_date, end_date)
 
         # Create the figure and axes objects
         fig, ax = plt.subplots()
@@ -250,10 +379,11 @@ class Scheduler:
         ax.axis('off')
 
         # Create the table
-        table: matplotlib.table.Table = ax.table(cellText=df.values, colLabels=df.columns, loc='center')
+        table: matplotlib.table.Table = ax.table(cellText=self.df_weekly.values, colLabels=self.df_weekly.columns,
+                                                 loc='center')
 
         # Set the cell width
-        table.auto_set_column_width(col=list(range(len(df.columns))))
+        table.auto_set_column_width(col=list(range(len(self.df_weekly.columns))))
 
         # Set the cell height
         for i in range(START_OF_DAY_HOUR, END_OF_DAY_HOUR):
@@ -276,3 +406,5 @@ class Scheduler:
 
         # Save the figure
         fig.savefig('calendar.png', dpi=100)
+
+        fig.show()
