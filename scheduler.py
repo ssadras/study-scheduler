@@ -1,120 +1,8 @@
-import sqlite3
-from sqlite3 import Error
+from config import DEBUG, START_OF_DAY_HOUR, END_OF_DAY_HOUR
 import matplotlib.pyplot as plt
 import matplotlib.table
 import pandas as pd
-
-DEBUG = True
-
-
-class Database:
-    def __init__(self, path):
-        self.path = path
-        self.conn = None
-
-        self.create_connection()
-
-    def create_connection(self):
-        """ create a database connection to a SQLite database """
-
-        if self.conn is not None:
-            return self.conn
-
-        try:
-            self.conn = sqlite3.connect(self.path, isolation_level=None)
-            print("Connection to SQLite DB successful")
-        except Error as e:
-            print(f"The error '{e}' occurred")
-
-        return self.conn
-
-    def create_table(self, create_table_sql):
-        """ create a table from the create_table_sql statement """
-
-        if DEBUG:
-            print("DB.create_table: ", create_table_sql)
-
-        try:
-            self.conn.execute(create_table_sql)
-            print("Table created successfully")
-        except Error as e:
-            print(f"The error '{e}' occurred")
-
-        return self.conn
-
-    def insert(self, insert_sql):
-        """ insert a row into a table from the insert_sql statement """
-
-        if DEBUG:
-            print("DB.insert: ", insert_sql)
-
-        try:
-            self.conn.execute(insert_sql)
-            print("Row inserted successfully")
-        except Error as e:
-            print(f"The error '{e}' occurred")
-
-        return self.conn
-
-    def insert_with_output_id(self, insert_sql):
-        """ insert a row into a table from the insert_sql statement and return the id of the inserted row """
-
-        if DEBUG:
-            print("DB.insert_with_output_id: ", insert_sql)
-
-        cursor = None
-
-        try:
-            cursor = self.conn.execute(insert_sql)
-            print("Row inserted successfully")
-        except Error as e:
-            print(f"The error '{e}' occurred")
-
-        return cursor.lastrowid
-
-    def select(self, select_sql):
-        """ select rows from a table from the select_sql statement """
-
-        if DEBUG:
-            print("DB.select: ", select_sql)
-
-        cursor = None
-
-        try:
-            cursor = self.conn.execute(select_sql)
-            print("Rows selected successfully")
-        except Error as e:
-            print(f"The error '{e}' occurred")
-
-        return cursor
-
-    def update(self, update_sql):
-        """ update rows from a table from the update_sql statement """
-
-        if DEBUG:
-            print("DB.update: ", update_sql)
-
-        try:
-            self.conn.execute(update_sql)
-            print("Rows updated successfully")
-        except Error as e:
-            print(f"The error '{e}' occurred")
-
-        return self.conn
-
-    def delete(self, delete_sql):
-        """ delete rows from a table from the delete_sql statement """
-
-        if DEBUG:
-            print("DB.delete: ", delete_sql)
-
-        try:
-            self.conn.execute(delete_sql)
-            print("Rows deleted successfully")
-        except Error as e:
-            print(f"The error '{e}' occurred")
-
-        return self.conn
+from db import Database
 
 
 class Scheduler:
@@ -322,8 +210,8 @@ class Scheduler:
             columns=['Time', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
 
         # Add the time to the dataframe
-        for i in range(7, 24):
-            df.loc[i - 7, 'Time'] = f'{i}:00'
+        for i in range(START_OF_DAY_HOUR, END_OF_DAY_HOUR):
+            df.loc[i - START_OF_DAY_HOUR, 'Time'] = f'{i}:00'
 
         # Add all activities to the dataframe
         print(activities)
@@ -336,8 +224,8 @@ class Scheduler:
             end_time = pd.to_datetime(activity[7]).strftime('%H:%M')
 
             # Find the start and end time index
-            start_time_index = int(start_time.split(':')[0]) - 7
-            end_time_index = int(end_time.split(':')[0]) - 7
+            start_time_index = int(start_time.split(':')[0]) - START_OF_DAY_HOUR
+            end_time_index = int(end_time.split(':')[0]) - START_OF_DAY_HOUR
 
             # Find the title
             title = activity[2]
@@ -368,17 +256,17 @@ class Scheduler:
         table.auto_set_column_width(col=list(range(len(df.columns))))
 
         # Set the cell height
-        for i in range(7, 24):
+        for i in range(START_OF_DAY_HOUR, END_OF_DAY_HOUR):
             height = 0.05
 
             # check the number of lines in the cell
             for j in range(1, 8):
-                num_lines = len(table[(i - 6, j)].get_text().get_text().split('\n'))
+                num_lines = len(table[(i - (START_OF_DAY_HOUR - 1), j)].get_text().get_text().split('\n'))
                 height = max(height, num_lines * 0.05)
 
             # set the cell heights
             for j in range(0, 8):
-                table[(i - 6, j)].set_height(height)
+                table[(i - (START_OF_DAY_HOUR - 1), j)].set_height(height)
 
         # Set the font size
         table.set_fontsize(14)
