@@ -1,8 +1,15 @@
-from config import DEBUG, START_OF_DAY_HOUR, END_OF_DAY_HOUR, TIME_INTERVAL
+from config import DEBUG, START_OF_DAY_HOUR, END_OF_DAY_HOUR, TIME_INTERVAL_TYPE
 import matplotlib.pyplot as plt
 import matplotlib.table
 import pandas as pd
 from db import Database
+
+if TIME_INTERVAL_TYPE == 1:
+    TIME_INTERVAL = 4
+elif TIME_INTERVAL_TYPE == 2:
+    TIME_INTERVAL = 2
+else:
+    TIME_INTERVAL = 1
 
 
 class Scheduler:
@@ -182,7 +189,7 @@ class Scheduler:
 
         return cursor
 
-    def get_activities_by_type(self, act_type, start_date, end_date):
+    def get_activities_by_a_type(self, act_type, start_date, end_date):
         """ get activities from the database e for a user """
 
         select_sql = f"""SELECT * FROM Activity WHERE type = {act_type} AND date >= '{start_date}' 
@@ -201,59 +208,118 @@ class Scheduler:
 
         return cursor
 
-    def add_activity_to_dataframe(self, start_time_index, end_time_index, column, title):
+    def get_activities_by_set_of_types(self, types: tuple, start_date, end_date):
+        """ get activities from the database e for a user """
+
+        select_sql = f"""SELECT * FROM Activity WHERE type IN {types} AND date >= '{start_date}' 
+                        AND date <= '{end_date}';"""
+
+        cursor = self.db.select(select_sql)
+
+        if cursor is None:
+            print("No activities found for these types")
+            return None
+
+        cursor = cursor.fetchall()
+        if cursor is None or len(cursor) == 0:
+            print("No activities found for these types")
+            return None
+
+        return cursor
+
+    def add_activity_to_dataframe(self, activity):
         """ Add an activity to the dataframe """
+
+        # Find the day of the week
+        column = pd.to_datetime(activity[5]).day_name()
+
+        # Find the start and end time
+        start_time = pd.to_datetime(activity[6]).strftime('%H:%M')
+        end_time = pd.to_datetime(activity[7]).strftime('%H:%M')
+
+        # Find the start and end time index
+        start_time_index, end_time_index = self.get_start_and_end_time_index(start_time, end_time)
+
+        # Find the title
+        title = activity[2]
+
         if DEBUG:
-            print(start_time_index, end_time_index, column, title)
+            print("add_activity_to_dataframe:", start_time_index, end_time_index, column, title)
 
         # Add the title to the dataframe
         for i in range(start_time_index, end_time_index):
+            if DEBUG:
+                print("add_activity_to_dataframe 2:", i, (END_OF_DAY_HOUR - START_OF_DAY_HOUR) * TIME_INTERVAL,
+                      len(self.df_weekly))
+
+            if i < 0 or i >= (END_OF_DAY_HOUR - START_OF_DAY_HOUR) * TIME_INTERVAL:
+                continue
+
             if (self.df_weekly.loc[i, column] == '' or self.df_weekly.loc[i, column] == 'nan'
                     or not isinstance(self.df_weekly.loc[i, column], str)):
                 self.df_weekly.loc[i, column] = title
             else:
                 self.df_weekly.loc[i, column] += f'\n{title}'
 
-    def create_weekly_dataframe_hourly(self, start_date, end_date):
+    def get_start_and_end_time_index(self, start_time, end_time):
+        start_time_index = None
+        end_time_index = None
+
+        start_hour = int(start_time.split(':')[0])
+        start_min = int(start_time.split(':')[1])
+
+        end_hour = int(end_time.split(':')[0])
+        end_min = int(end_time.split(':')[1])
+
+        # Find the start and end time index
+        if TIME_INTERVAL_TYPE == 1:
+            start_time_index = (start_hour - START_OF_DAY_HOUR) * 4 + (start_min // 15)
+
+            end_min_index = end_min // 15
+            end_time_index = (end_hour - START_OF_DAY_HOUR) * 4 + end_min_index + (end_min % 15 > 0)
+
+        elif TIME_INTERVAL_TYPE == 2:
+            start_time_index = (start_hour - START_OF_DAY_HOUR) * 2 + (start_min // 30)
+            end_time_index = (end_hour - START_OF_DAY_HOUR) * 2 + (end_min // 30) + (end_min % 30 > 0)
+
+        elif TIME_INTERVAL_TYPE == 3:
+            start_time_index = (start_hour - START_OF_DAY_HOUR)
+            end_time_index = (end_hour - START_OF_DAY_HOUR) + (end_min > 0)
+
+        if DEBUG:
+            print("get_start_and_end_time_index:", start_time_index, end_time_index)
+
+        return start_time_index, end_time_index
+
+    def create_weekly_dataframe_hourly(self, start_date, end_date, types: tuple = (0, 1, 2, 3, 4, 5)):
         """ create a dataframe for the activities in the database for a period of time based on hourly intervals """
 
         # Get all activities in the interval
-        activities = self.get_activities_by_date(start_date, end_date)
+        activities = self.get_activities_by_set_of_types(types, start_date, end_date)
 
         # Add the time to the dataframe
         for i in range(START_OF_DAY_HOUR, END_OF_DAY_HOUR):
             self.df_weekly.loc[i - START_OF_DAY_HOUR, 'Time'] = f'{i}:00'
 
+            if DEBUG:
+                self.df_weekly.loc[i - START_OF_DAY_HOUR, 'index'] = f'{i - START_OF_DAY_HOUR}'
+
         # Add all activities to the dataframe
         if DEBUG:
-            print(activities)
+            print("create_weekly_dataframe_hourly:", activities)
 
         for activity in activities:
-            # Find the day of the week
-            day_of_week = pd.to_datetime(activity[5]).day_name()
-
-            # Find the start and end time
-            start_time = pd.to_datetime(activity[6]).strftime('%H:%M')
-            end_time = pd.to_datetime(activity[7]).strftime('%H:%M')
-
-            # Find the start and end time index
-            start_time_index = int(start_time.split(':')[0]) - START_OF_DAY_HOUR
-            end_time_index = int(end_time.split(':')[0]) - START_OF_DAY_HOUR
-
-            # Find the title
-            title = activity[2]
-
-            self.add_activity_to_dataframe(start_time_index, end_time_index, day_of_week, title)
+            self.add_activity_to_dataframe(activity)
 
         # Fill all empty cells with empty string
         self.df_weekly.fillna('', inplace=True)
 
         return self.df_weekly
 
-    def create_weekly_dataframe_30_mins(self, start_date, end_date):
+    def create_weekly_dataframe_30_mins(self, start_date, end_date, types: tuple = (0, 1, 2, 3, 4, 5)):
         """ create a dataframe for the activities in the database for a period of time based on 30 minutes intervals """
         # Get all activities in the interval
-        activities = self.get_activities_by_date(start_date, end_date)
+        activities = self.get_activities_by_set_of_types(types, start_date, end_date)
 
         # Add the time to the dataframe
         for i in range(START_OF_DAY_HOUR, END_OF_DAY_HOUR):
@@ -266,40 +332,20 @@ class Scheduler:
 
         # Add all activities to the dataframe
         if DEBUG:
-            print(activities)
+            print("create_weekly_dataframe_30_mins:", activities)
 
         for activity in activities:
-            # Find the day of the week
-            day_of_week = pd.to_datetime(activity[5]).day_name()
-
-            # Find the start and end time
-            start_time = pd.to_datetime(activity[6]).strftime('%H:%M')
-            end_time = pd.to_datetime(activity[7]).strftime('%H:%M')
-
-            # Find the start and end time index
-            tmp_start_time = start_time.split(':')
-            start_time_index = 2 * (int(tmp_start_time[0]) - START_OF_DAY_HOUR) + (int(tmp_start_time[1]) // 30)
-            tmp_end_time = end_time.split(':')
-
-            end_time_index = 2 * int(tmp_end_time[0]) - int(tmp_start_time[0]) + (int(tmp_end_time[1]) // 30)
-
-            if DEBUG:
-                print(start_time_index, start_time, end_time_index, end_time)
-
-            # Find the title
-            title = activity[2]
-
-            self.add_activity_to_dataframe(start_time_index, end_time_index, day_of_week, title)
+            self.add_activity_to_dataframe(activity)
 
         # Fill all empty cells with empty string
         self.df_weekly.fillna('', inplace=True)
 
         return self.df_weekly
 
-    def create_weekly_dataframe_15_mins(self, start_date, end_date):
+    def create_weekly_dataframe_15_mins(self, start_date, end_date, types: tuple = (0, 1, 2, 3, 4, 5)):
         """ create a dataframe for the activities in the database for a period of time based on 15 minutes intervals """
         # Get all activities in the interval
-        activities = self.get_activities_by_date(start_date, end_date)
+        activities = self.get_activities_by_set_of_types(types, start_date, end_date)
 
         # Add the time to the dataframe
         for i in range(START_OF_DAY_HOUR, END_OF_DAY_HOUR):
@@ -316,41 +362,10 @@ class Scheduler:
 
         # Add all activities to the dataframe
         if DEBUG:
-            print(activities)
+            print("create_weekly_dataframe_15_mins:", activities)
 
         for activity in activities:
-            # Find the day of the week
-            day_of_week = pd.to_datetime(activity[5]).day_name()
-
-            # Find the start and end time
-            start_time = pd.to_datetime(activity[6]).strftime('%H:%M')
-            end_time = pd.to_datetime(activity[7]).strftime('%H:%M')
-
-            # Find the start and end time index
-            tmp_start_hour, tmp_start_min = start_time.split(':')
-            tmp_start_hour = int(tmp_start_hour)
-            tmp_start_min = int(tmp_start_min)
-
-            tmp_end_hour, tmp_end_min = end_time.split(':')
-            tmp_end_hour = int(tmp_end_hour)
-            tmp_end_min = int(tmp_end_min)
-
-            if DEBUG:
-                print("CHECK1: ", tmp_start_hour, tmp_start_min, tmp_end_hour, tmp_end_min)
-                print("CHECK2: ", tmp_start_hour - START_OF_DAY_HOUR, tmp_start_min // 15)
-
-            start_time_index = 4 * (tmp_start_hour - START_OF_DAY_HOUR) + (tmp_start_min // 15)
-
-            end_time_index = start_time_index + (4 * (tmp_end_hour - tmp_start_hour)
-                                                 + (tmp_end_min // 15)) + 1
-
-            if DEBUG:
-                print(start_time_index, start_time, end_time_index, end_time)
-
-            # Find the title
-            title = activity[2]
-
-            self.add_activity_to_dataframe(start_time_index, end_time_index, day_of_week, title)
+            self.add_activity_to_dataframe(activity)
 
         # Fill all empty cells with empty string
         self.df_weekly.fillna('', inplace=True)
@@ -365,9 +380,9 @@ class Scheduler:
         """
 
         # Create the dataframe
-        if TIME_INTERVAL == 1:
+        if TIME_INTERVAL_TYPE == 1:
             self.create_weekly_dataframe_15_mins(start_date, end_date)
-        elif TIME_INTERVAL == 2:
+        elif TIME_INTERVAL_TYPE == 2:
             self.create_weekly_dataframe_30_mins(start_date, end_date)
         else:
             self.create_weekly_dataframe_hourly(start_date, end_date)
