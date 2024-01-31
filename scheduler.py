@@ -227,6 +227,11 @@ class Scheduler:
 
         return cursor
 
+    def add_recurring_activities_to_dataframe(self, activities, start_date, end_date):
+        """ Add all recurring activities to the dataframe """
+        # todo: Finish this function
+        pass
+
     def add_activity_to_dataframe(self, activity):
         """ Add an activity to the dataframe """
 
