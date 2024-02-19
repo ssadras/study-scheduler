@@ -1,4 +1,7 @@
 from scheduler import Scheduler
+from disctoken import token
+import discord
+
 
 scheduler = Scheduler()
 
@@ -12,3 +15,17 @@ scheduler.insert_user("sadra_s", "sadra", "test@test.com")
 # scheduler.insert_activity("sadra_s", "test5", "test4", 1, "1-23-2024", "12:15", "14:35", True, 0, "1-25-2024")
 scheduler.visualize_calendar("1-22-2024", '1-29-2024')
 # Jeremy part 😅
+
+
+class MyClient(discord.Client):
+    async def on_ready(self):
+        print(f'Logged on as {self.user}!')
+
+    async def on_message(self, message):
+        print(f'Message from {message.author}: {message.content}')
+
+intents = discord.Intents.default()
+intents.message_content = True
+
+client = MyClient(intents=intents)
+client.run(token)
