@@ -1,5 +1,5 @@
 from scheduler import Scheduler
-from disctoken import token
+from keys import TOKEN
 import discord
 
 
@@ -28,4 +28,4 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 client = MyClient(intents=intents)
-client.run(token)
+client.run(TOKEN)
