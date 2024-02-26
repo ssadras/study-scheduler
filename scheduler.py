@@ -32,12 +32,6 @@ class Scheduler:
                             email    VARCHAR(255)
                         );"""
 
-        recurring_activity_table_sql = """CREATE TABLE IF NOT EXISTS RecurringActivity (
-                            id      INTEGER PRIMARY KEY AUTOINCREMENT,
-                            pattern INTEGER NOT NULL,
-                            endDate DATE NOT NULL
-                        );"""
-
         activities_table_sql = """CREATE TABLE IF NOT EXISTS Activity (
                             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
                             userID              INTEGER NOT NULL,
@@ -47,15 +41,12 @@ class Scheduler:
                             date                DATE,
                             startTime           TIME,
                             endTime             TIME,
-                            isRecurring         BOOLEAN,
-                            recurringActivityID INTEGER,
-                            FOREIGN KEY (userID) REFERENCES User (id),
-                            FOREIGN KEY (recurringActivityID) REFERENCES RecurringActivity (id)
+                            originalActivityID  INTEGER,
+                            FOREIGN KEY (userID) REFERENCES User (id)
                         );"""
 
         try:
             self.db.create_table(user_table_sql)
-            self.db.create_table(recurring_activity_table_sql)
             self.db.create_table(activities_table_sql)
         except Exception as e:
             print(f"The error '{e}' occurred")
@@ -101,48 +92,79 @@ class Scheduler:
         return cursor
 
     def insert_activity(self, username, title, description, act_type, date, start_time, end_time, is_recurring=False,
-                        recurring_pattern=None, recurring_end_date=None):
+                        recurring_pattern=None, recurring_end_date=None, original_activity_id=None, user_id=None):
         """ insert an activity into the database
 
         act_type: 0-Busy 1-Group Meeting 2-Personal Optional 3-Group Optional 4-Fun 5-Other
         """
 
-        recurring_activity_id = None
-
-        if is_recurring:
-            recurring_activity_id = self.insert_recurring_activity(recurring_pattern, recurring_end_date)
-
-        user_id = self.get_user(username)
+        if user_id is None:
+            user_id = self.get_user(username)
         if user_id is None:
             print("User does not exist")
             return False
 
         user_id = user_id[0]
 
-        insert_sql = f"""INSERT INTO Activity (userID, title, description, type, date, startTime, endTime, isRecurring, 
-                    recurringActivityID) VALUES ({user_id}, '{title}', '{description}', {act_type}, '{date}', '{start_time}'
-                    , '{end_time}', '{is_recurring}', '{recurring_activity_id}');"""
+        if original_activity_id is not None:
+            insert_sql = f"""INSERT INTO Activity (userID, title, description, type, date, startTime, endTime, 
+                            originalActivityID) VALUES ({user_id}, '{title}', '{description}', {act_type}, '{date}', 
+                            '{start_time}', '{end_time}','{original_activity_id}');"""
+        else:
+            insert_sql = f"""INSERT INTO Activity (userID, title, description, type, date, startTime, endTime) VALUES 
+                ({user_id}, '{title}', '{description}', {act_type}, '{date}', '{start_time}', '{end_time}');"""
 
         try:
-            self.db.insert(insert_sql)
+            activity_id = self.db.insert_with_output_id(insert_sql)
+
+            if not is_recurring or original_activity_id is None:
+                return True
+
+            activity = [activity_id, user_id, title, description, act_type, date, start_time, end_time]
+            self.insert_recurring_activity(activity, recurring_pattern, recurring_end_date)
         except Exception as e:
             print(f"The error '{e}' occurred")
             return False
 
         return True
 
-    def insert_recurring_activity(self, recurring_pattern, recurring_end_date):
+    def insert_recurring_activity(self, activity, recurring_pattern, recurring_end_date):
         """ insert a recurring activity into the database
 
         recurring_pattern: 0-Daily 1-Weekly 2-Monthly 3-Yearly
         """
 
-        insert_sql = f"""INSERT INTO RecurringActivity (pattern, endDate)
-                        VALUES ('{recurring_pattern}', '{recurring_end_date}');"""
+        if recurring_pattern is None or recurring_end_date is None:
+            return
 
-        recurring_activity_id = self.db.insert_with_output_id(insert_sql)
+        recurring_pattern = int(recurring_pattern)
+        recurring_end_date = pd.to_datetime(recurring_end_date)
 
-        return recurring_activity_id
+        if recurring_pattern == 0:
+            date = pd.to_datetime(activity[5]) + pd.DateOffset(days=1)
+        elif recurring_pattern == 1:
+            date = pd.to_datetime(activity[5]) + pd.DateOffset(weeks=1)
+        elif recurring_pattern == 2:
+            date = pd.to_datetime(activity[5]) + pd.DateOffset(months=1)
+        elif recurring_pattern == 3:
+            date = pd.to_datetime(activity[5]) + pd.DateOffset(years=1)
+        else:
+            return
+
+        while date < recurring_end_date:
+            self.insert_activity("", activity[2], activity[3], activity[4], date, activity[6], activity[7],
+                                 False, original_activity_id=activity[0], user_id=activity[1])
+
+            if recurring_pattern == 0:
+                date += pd.DateOffset(days=1)
+            elif recurring_pattern == 1:
+                date += pd.DateOffset(weeks=1)
+            elif recurring_pattern == 2:
+                date += pd.DateOffset(months=1)
+            elif recurring_pattern == 3:
+                date += pd.DateOffset(years=1)
+
+        return
 
     def get_activities_by_user(self, username, start_date, end_date):
         """ get activities from the database for a user """
@@ -226,11 +248,6 @@ class Scheduler:
             return None
 
         return cursor
-
-    def add_recurring_activities_to_dataframe(self, activities, start_date, end_date):
-        """ Add all recurring activities to the dataframe """
-        # todo: Finish this function
-        pass
 
     def add_activity_to_dataframe(self, activity):
         """ Add an activity to the dataframe """
