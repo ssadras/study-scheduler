@@ -1,2 +1,4 @@
-/keys.py
-/message_ids.txt
+venv
+keys.py
+__pycache__/
+calendar.png
